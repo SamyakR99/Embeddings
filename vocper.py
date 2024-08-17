@@ -8,16 +8,11 @@ from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 
 
-import torch
 import clip
 from torchvision.datasets import VOCSegmentation
 from torch.utils.data import DataLoader
-from torchvision import transforms
-import numpy as np
 from tqdm import tqdm
-from PIL import Image
 import matplotlib.pyplot as plt
-import cv2
 
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 from torchvision.transforms import InterpolationMode
@@ -231,47 +226,56 @@ if args.arch == 'CS':
         iou_scores = []
         
         text_feats = clip.encode_text_with_prompt_ensemble(model, voc_classes_background[1:], device)
-        metric_iou = MulticlassJaccardIndex(num_classes=len(voc_classes_background), ignore_index=0).to('cpu')
-        
+        metric_iou = MulticlassJaccardIndex(num_classes=len(voc_classes_background), average=None, ignore_index=0).to('cpu')
+        postive_pred_iou = []
+        postive_only_iou = []
+
         for images, targets in tqdm(test_loader):
 
             images = images.to(device)
             targets = targets#.to(device)
+            mask_shape = targets.shape[-2:]
 
             image_features = model.encode_image(images)
             image_features = F.normalize(image_features, dim=-1)
             text_features = F.normalize(text_feats, dim=-1)
             
-            mask_shape = targets.shape[-2:]
+            
 
             # features = 100.0 * image_features @ text_features.t()
             similarity = clip.clip_feature_surgery( image_features, text_features)
             similarity_map = clip.get_similarity_map(similarity[:, 1:, :], mask_shape)
             simialrity_map_argmax = similarity_map.argmax(dim = -1) +  1
-            # print('simialrity_map_argmax',torch.unique(simialrity_map_argmax))
-            # print(simialrity_map_argmax.min(), simialrity_map_argmax.max())
-            # print(targets.min(), targets.max())
             targets[targets == -1] = 0
             
             if args.thres == 1:
                 logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
                 simialrity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
-
-        
-            metric_iou.update(simialrity_map_argmax.cpu(), targets)
             
-        print(metric_iou.compute().item() * 100)       
+            iou_scores = metric_iou(simialrity_map_argmax.cpu(), targets)#.to(int))
+            positive_iou = iou_scores[torch.unique(simialrity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
+            
+            positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
 
-if args.arch == 'Ours':
+    print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+    print('postive_only_iou', np.nanmean(postive_only_iou)*100)
+
+elif args.arch == 'Ours':
     with torch.no_grad():
         iou_scores = []
         text_feats = clip.encode_text_with_prompt_ensemble(model, voc_classes_background[1:], device)
-        metric_iou = MulticlassJaccardIndex(num_classes=len(voc_classes_background), ignore_index=0).to('cpu')
+        metric_iou = MulticlassJaccardIndex(num_classes=len(voc_classes_background), average=None, ignore_index=0).to('cpu')
+        postive_pred_iou = []
+        postive_only_iou = []
         
         for images, targets in tqdm(test_loader):
 
             images = images.to(device)
             targets = targets#.to(device)
+            mask_shape = targets.shape[-2:]
+
 
             image_features = model.encode_image(images)
             image_features = F.normalize(image_features, dim=-1)
@@ -281,11 +285,8 @@ if args.arch == 'Ours':
             text_feat = text_projector(text_feats)
             text_features = F.normalize(text_feat, dim=-1)
             
-            mask_shape = targets.shape[-2:]
-
+            
             features = image_features @ text_features.t()
-            # similarity = clip.clip_feature_surgery( image_features, text_features)
-            # similarity_map = clip.get_similarity_map(similarity[:, 1:, :], mask_shape)
             similarity_map = clip.get_similarity_map(features[:, 1:, :], mask_shape)
             simialrity_map_argmax = similarity_map.argmax(dim = -1) +  1
 
@@ -294,10 +295,63 @@ if args.arch == 'Ours':
                 logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
                 simialrity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
 
-            metric_iou.update(simialrity_map_argmax.cpu(), targets)    
+            iou_scores = metric_iou(simialrity_map_argmax.cpu(), targets)#.to(int))
+            positive_iou = iou_scores[torch.unique(simialrity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
             
-    print(metric_iou.compute().item() * 100)        
+            positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
+
+    print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+    print('postive_only_iou', np.nanmean(postive_only_iou)*100)
+
+
+elif args.arch == 'CS_Ours':
+    with torch.no_grad():
+        iou_scores = []
+        text_feats = clip.encode_text_with_prompt_ensemble(model, voc_classes_background[1:], device)
+        metric_iou = MulticlassJaccardIndex(num_classes=len(voc_classes_background), average=None, ignore_index=0).to('cpu')
+        postive_pred_iou = []
+        postive_only_iou = []
+        
+        for images, targets in tqdm(test_loader):
+
+            images = images.to(device)
+            targets = targets#.to(device)
+            mask_shape = targets.shape[-2:]
+
+
+            image_features = model.encode_image(images)
+            image_features = F.normalize(image_features, dim=-1)
+            img_feat = image_projector(image_features)
+            image_features = img_feat
+
+            text_feat = text_projector(text_feats)
+            text_features = F.normalize(text_feat, dim=-1)
             
+            
+            # features = image_features @ text_features.t()
+            similarity = clip.clip_feature_surgery( image_features, text_features)
+            similarity_map = clip.get_similarity_map(similarity[:, 1:, :], mask_shape)
+            # similarity_map = clip.get_similarity_map(features[:, 1:, :], mask_shape)
+            simialrity_map_argmax = similarity_map.argmax(dim = -1) +  1
+
+
+            targets[targets == -1] = 0 ## making edges background
+            if args.thres == 1:
+                logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
+                simialrity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
+
+            iou_scores = metric_iou(simialrity_map_argmax.cpu(), targets)#.to(int))
+            positive_iou = iou_scores[torch.unique(simialrity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
+            
+            positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
+
+    print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+    print('postive_only_iou', np.nanmean(postive_only_iou)*100)
+
 
             
             
