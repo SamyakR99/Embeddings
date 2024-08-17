@@ -9,11 +9,7 @@ import torch.nn.functional as F
 import clip
 from torch.utils.data import DataLoader
 from torchvision import transforms
-import numpy as np
 from tqdm import tqdm
-from PIL import Image
-import matplotlib.pyplot as plt
-import cv2
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 from torchvision.transforms import InterpolationMode
 BICUBIC = InterpolationMode.BICUBIC
@@ -73,11 +69,6 @@ classnames = ['background',"person", "bicycle", "car", "motorcycle", "airplane",
                            "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors",
                            "teddy bear", "hair drier", "toothbrush"]
 
-all_texts = classnames[1:]
-
-with torch.no_grad():
-    text_feats = clip.encode_text_with_prompt_ensemble(model, all_texts, device)
-
 
 
 import torch.nn as nn
@@ -125,9 +116,14 @@ if args.arch == 'CS':
     with torch.no_grad():
         iou_scores = []
         threshold = 0.9
-        metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), ignore_index=0).to('cpu')
+
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
+        
+        postive_pred_iou = []
+        postive_only_iou = []
+        
         for img_id in tqdm(image_ids):
-        # for img_id in [image_ids[129]]:
             img_info = coco.loadImgs(img_id)[0]
             img_path = image_dir + img_info['file_name']
             
@@ -155,28 +151,38 @@ if args.arch == 'CS':
             
             image_features = model.encode_image(img)
             image_features = F.normalize(image_features, dim=-1)
-            
-            text_features = F.normalize(text_feats, dim=-1) 
-    #         features = image_features @ text_features.t()
-            similarity = clip.clip_feature_surgery(image_features, text_features)
+            text_features = F.normalize(text_feats, dim=-1)
 
+
+            similarity = clip.clip_feature_surgery(image_features, text_features)
             similarity_map = clip.get_similarity_map(similarity[:, 1:, :], complete_mask.shape)
             similarity_map_argmax = similarity_map.argmax(-1)+1
+
             if args.thres == 1:
                 logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
                 similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
             # print('similarity_map',similarity_map_argmax.shape)
             # print(torch.unique(similarity_map_argmax))
-            metric_iou.update(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))
+            iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
+            positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
             
-        print(metric_iou.compute().item())
+            positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
+
+    print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+    print('postive_only_iou', np.nanmean(postive_only_iou)*100)
+
 
 elif args.arch == 'Ours':
     with torch.no_grad():
         threshold = 0.9
-        metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), ignore_index=0).to('cpu')
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
+        postive_pred_iou = []
+        postive_only_iou = []
+        
         for img_id in tqdm(image_ids):
-        # for img_id in [image_ids[129]]:
             img_info = coco.loadImgs(img_id)[0]
             img_path = image_dir + img_info['file_name']
             
@@ -220,15 +226,25 @@ elif args.arch == 'Ours':
             if args.thres == 1:
                 logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
                 similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
-            # print('similarity_map',similarity_map_argmax.shape)
-            # print(torch.unique(similarity_map_argmax))
-            metric_iou.update(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))
-        print(metric_iou.compute().item())
+            
+            iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
+            positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
+            
+            positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
 
-elif args.arch == 'CS_OUR':
+    print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+    print('postive_only_iou', np.nanmean(postive_only_iou)*100)
+
+elif args.arch == 'CS_Ours':
     with torch.no_grad():
         threshold = 0.9
-        metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), ignore_index=0).to('cpu')
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
+        postive_pred_iou = []
+        postive_only_iou = []
+        
         for img_id in tqdm(image_ids):
         # for img_id in [image_ids[129]]:
             img_info = coco.loadImgs(img_id)[0]
@@ -258,7 +274,6 @@ elif args.arch == 'CS_OUR':
             
             image_features = model.encode_image(img)
             image_features = F.normalize(image_features, dim=-1)
-            
             img_feat = image_projector(image_features)
             image_features = img_feat
             
@@ -274,8 +289,14 @@ elif args.arch == 'CS_OUR':
             if args.thres == 1:
                 logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
                 similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
-            # print('similarity_map',similarity_map_argmax.shape)
-            # print(torch.unique(similarity_map_argmax))
-            metric_iou.update(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))
-        print(metric_iou.compute().item())
+            
+            iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
+            positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
+            
+            positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
+
+    print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+    print('postive_only_iou', np.nanmean(postive_only_iou)*100)
         
