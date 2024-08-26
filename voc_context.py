@@ -88,7 +88,8 @@ dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
 
 
 import torch.nn as nn
-sizes = [512, 384, 256]
+# sizes = [512, 384, 256] ## RN101
+sizes = [1024, 768, 512] ## RN50
 
 layers_text = []
 for i in range(len(sizes) - 2):
@@ -98,7 +99,8 @@ for i in range(len(sizes) - 2):
 layers_text.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 text_projector = nn.Sequential(*layers_text)
 
-size_img = [512, 256]
+# size_img = [512, 256] ## RN101
+size_img = [1024, 512]  ## RN50
 layers_img = []
 # for i in range(len(sizes) - 2):
 #     layers_img.append(nn.Linear(size_img[i], size_img[i + 1], bias=False))
@@ -112,7 +114,10 @@ image_projector = nn.Sequential(*layers_img).to(device)
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.003R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.002R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90%_0.002R/model_best.pth.tar'
+
+
 state_dict = torch.load(model_path)
 
 projector_weights_text = {}
@@ -140,7 +145,9 @@ from tqdm import tqdm
 voc_context_classes = ['background','aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'table', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor', 'bag', 'bed', 'bench', 'book', 'building', 'cabinet', 'ceiling', 'cloth', 'computer', 'cup', 'door', 'fence', 'floor', 'flower', 'food', 'grass', 'ground', 'keyboard', 'light', 'mountain', 'mouse', 'curtain', 'platform', 'sign', 'plate', 'road', 'rock', 'shelves', 'sidewalk', 'sky', 'snow', 'bedclothes', 'track', 'tree', 'truck', 'wall', 'water', 'window', 'wood']
 
 threshold = 0.9
-model, _ = clip.load("CS-RN101", device=device)
+# model, _ = clip.load("CS-RN101", device=device)
+
+model, _ = clip.load("CS-RN50", device=device)
 
 if args.arch == 'CS':
     with torch.no_grad():

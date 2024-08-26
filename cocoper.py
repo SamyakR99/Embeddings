@@ -40,7 +40,11 @@ image_dir = '/home/samyakr2/multilabel/data/coco/val2017/'
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-model, _ = clip.load("CS-RN101", device=device)
+# model, _ = clip.load("CS-RN101", device=device)
+model, _ = clip.load("CS-RN50", device=device)
+# model, _ = clip.load("CS-ViT-B/16", device=device)
+
+
 preprocess_img =  Compose([Resize((448, 448), interpolation=BICUBIC), ToTensor(),
     Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))])
 
@@ -72,7 +76,8 @@ classnames = ['background',"person", "bicycle", "car", "motorcycle", "airplane",
 
 
 import torch.nn as nn
-sizes = [512, 384, 256]
+# sizes = [512, 384, 256] ## RN101
+sizes = [1024, 768, 512] ## RN50
 
 layers_text = []
 for i in range(len(sizes) - 2):
@@ -82,7 +87,8 @@ for i in range(len(sizes) - 2):
 layers_text.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 text_projector = nn.Sequential(*layers_text)
 
-size_img = [512, 256]
+# size_img = [512, 256] ## RN101
+size_img = [1024, 512]  ## RN50
 layers_img = []
 # for i in range(len(sizes) - 2):
 #     layers_img.append(nn.Linear(size_img[i], size_img[i + 1], bias=False))
@@ -95,7 +101,14 @@ image_projector = nn.Sequential(*layers_img).to(device)
 
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.003R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90%_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90_0.004R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.003R/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
+
+
 state_dict = torch.load(model_path)
 
 projector_weights_text = {}

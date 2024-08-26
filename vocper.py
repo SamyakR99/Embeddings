@@ -37,7 +37,9 @@ OPENAI_DATASET_STD = (0.26862954, 0.26130258, 0.27577711)
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model, _ = clip.load("CS-RN101", device=device)
+# model, _ = clip.load("CS-RN101", device=device)
+model, _ = clip.load("CS-RN50", device=device)
+# model, _ = clip.load('CS-ViT-B/16', device=device)
 preprocess_img =  Compose([Resize((224, 224), interpolation=BICUBIC), ToTensor(),
     Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))])
 
@@ -164,7 +166,8 @@ dataset = PascalVOC(root=root_path_voc, split='val',
 test_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=1, shuffle=False, num_workers=8)
 
 import torch.nn as nn
-sizes = [512, 384, 256]
+# sizes = [512, 384, 256] ## RN101
+sizes = [1024, 768, 512] ## RN50
 
 layers_text = []
 for i in range(len(sizes) - 2):
@@ -174,7 +177,8 @@ for i in range(len(sizes) - 2):
 layers_text.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 text_projector = nn.Sequential(*layers_text)
 
-size_img = [512, 256]
+# size_img = [512, 256] ## RN101
+size_img = [1024, 512]  ## RN50
 layers_img = []
 # for i in range(len(sizes) - 2):
 #     layers_img.append(nn.Linear(size_img[i], size_img[i + 1], bias=False))
@@ -188,7 +192,10 @@ image_projector = nn.Sequential(*layers_img).to(device)
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.003R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.002R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90%_0.002R/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
+
 state_dict = torch.load(model_path)
 
 projector_weights_text = {}
@@ -281,8 +288,12 @@ elif args.arch == 'Ours':
             image_features = F.normalize(image_features, dim=-1)
             img_feat = image_projector(image_features)
             image_features = img_feat
+            # print('img_feat', img_feat.shape)
+            # break
+
 
             text_feat = text_projector(text_feats)
+
             text_features = F.normalize(text_feat, dim=-1)
             
             
@@ -325,7 +336,7 @@ elif args.arch == 'CS_Ours':
             image_features = F.normalize(image_features, dim=-1)
             img_feat = image_projector(image_features)
             image_features = img_feat
-
+            
             text_feat = text_projector(text_feats)
             text_features = F.normalize(text_feat, dim=-1)
             

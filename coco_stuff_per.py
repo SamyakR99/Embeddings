@@ -77,9 +77,11 @@ for idx in range (len(line)):
 
 
 import torch.nn as nn
-sizes = [512, 384, 256]
+# sizes = [512, 384, 256] ## RN101
+sizes = [1024, 768, 512] ## RN50
 device = "cuda" if torch.cuda.is_available() else "cpu"
-model, _ = clip.load("CS-RN101", device=device)
+# model, _ = clip.load("CS-RN101", device=device)
+model, _ = clip.load("CS-RN50", device=device)
 
 layers_text = []
 for i in range(len(sizes) - 2):
@@ -89,7 +91,8 @@ for i in range(len(sizes) - 2):
 layers_text.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 text_projector = nn.Sequential(*layers_text)
 
-size_img = [512, 256]
+# size_img = [512, 256] ## RN101
+size_img = [1024, 512]  ## RN50
 layers_img = []
 # for i in range(len(sizes) - 2):
 #     layers_img.append(nn.Linear(size_img[i], size_img[i + 1], bias=False))
@@ -102,7 +105,13 @@ image_projector = nn.Sequential(*layers_img).to(device)
 
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.003R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_with_SSL_90_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90%_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90_0.004R/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
+
+
 state_dict = torch.load(model_path)
 
 projector_weights_text = {}
@@ -180,11 +189,15 @@ elif args.arch == 'Ours':
             lab = lab*255 + 1
             lab[lab==256] = 0
             
+            
             iou_scores = metric_iou(similarity_map_argmax.cpu(), lab[0])#.to(int))
-            positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()]
             postive_pred_iou.append(torch.nanmean(positive_iou).item())
 
-            positive_iou_v2 = iou_scores[iou_scores>0]
+            positive_iou_v2 = iou_scores[iou_scores>0]  ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            # print(torch.unique(lab))
+            # print('asdfsfhfgf', positive_iou_v2)
+            # print('-'*25)
             postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
 
         print('positive_pred', np.nanmean(postive_pred_iou) * 100)
