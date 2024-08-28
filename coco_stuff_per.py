@@ -16,7 +16,8 @@ from tqdm import tqdm
 parser = argparse.ArgumentParser(description="A script to demonstrate command-line arguments.")
     
 # Add the --arch argument
-parser.add_argument('--arch', type=str, required=True, help="The architecture to use (e.g., 'rn101').")
+parser.add_argument('--arch', type=str, required=True, help="The architecture to use (e.g., 'CLIP').")
+parser.add_argument('--model_arch', type=str, required=True, help="The architecture to use (e.g., 'rn101').")
 # parser.add_argument('--thres', type=int, required=True, help="The architecture to use (e.g., 'rn101').")
 
 # Parse the arguments
@@ -77,11 +78,29 @@ for idx in range (len(line)):
 
 
 import torch.nn as nn
-# sizes = [512, 384, 256] ## RN101
-sizes = [1024, 768, 512] ## RN50
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# model, _ = clip.load("CS-RN101", device=device)
-model, _ = clip.load("CS-RN50", device=device)
+
+if args.model_arch == 'CS-RN101':
+    sizes = [512, 384, 256] ## RN101
+    model, _ = clip.load("CS-RN101", device=device)
+    size_img = [512, 256] ## RN101
+
+elif args.model_arch == 'CS-RN50':
+    sizes = [1024, 768, 512] ## RN101
+    model, _ = clip.load("CS-RN50", device=device)
+    size_img = [1024, 512]  ## RN50
+
+elif args.model_arch == 'RN50':
+    sizes = [1024, 768, 512] ## RN101
+    model, _ = clip.load("RN50", device=device)
+    size_img = [1024, 512]  ## RN50
+
+elif args.model_arch == 'RN101':
+    sizes = [512, 384, 256] ## RN101
+    model, _ = clip.load("RN101", device=device)
+    size_img = [512, 256]  ## RN50
+
 
 layers_text = []
 for i in range(len(sizes) - 2):
@@ -91,8 +110,7 @@ for i in range(len(sizes) - 2):
 layers_text.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
 text_projector = nn.Sequential(*layers_text)
 
-# size_img = [512, 256] ## RN101
-size_img = [1024, 512]  ## RN50
+
 layers_img = []
 # for i in range(len(sizes) - 2):
 #     layers_img.append(nn.Linear(size_img[i], size_img[i + 1], bias=False))
@@ -109,7 +127,15 @@ image_projector = nn.Sequential(*layers_img).to(device)
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_with_SSL_90%/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90%_0.002R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90_0.004R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-1e-07R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-0.02R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-1e-05R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-0.003R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN101_SSL_0.004R/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN101_SSL_90_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.003R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN50e51-0.01R/model_best.pth.tar'
 
 
 state_dict = torch.load(model_path)
@@ -157,6 +183,45 @@ if args.arch == 'CS':
             postive_pred_iou.append(torch.nanmean(positive_iou).item())
 
             positive_iou_v2 = iou_scores[iou_scores>0]
+            postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
+
+        print('positive_pred', np.nanmean(postive_pred_iou) * 100)
+        print('postive_only_iou', np.nanmean(postive_only_iou)*100)
+
+elif args.arch == 'CLIP_VV':
+    with torch.no_grad():
+        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device)
+        metric_iou = MulticlassJaccardIndex(num_classes=len(coco_stuff_labels), average=None, ignore_index=0).to('cpu')
+
+        postive_pred_iou = []
+        postive_only_iou = []
+        
+        for img, lab in tqdm(dataloader):
+            img = img.to(device)
+
+            image_features = model.encode_image(img)
+            image_features = F.normalize(image_features, dim=-1)
+            
+            # text_feat = text_projector(text_feats)
+            text_features = F.normalize(text_feats, dim=-1)
+            
+
+            features = image_features @ text_features.t()
+            similarity_map = clip.get_similarity_map(features[:, 1:, :], lab.shape[-2:])
+            similarity_map_argmax = similarity_map.argmax(-1)+1
+            
+            lab = lab*255 + 1
+            lab[lab==256] = 0
+            
+            
+            iou_scores = metric_iou(similarity_map_argmax.cpu(), lab[0])#.to(int))
+            positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()]
+            postive_pred_iou.append(torch.nanmean(positive_iou).item())
+
+            positive_iou_v2 = iou_scores[iou_scores>0]  ## Keep only postive classes for IoU, note postive means from our prediction, not GT
+            # print(torch.unique(lab))
+            # print('asdfsfhfgf', positive_iou_v2)
+            # print('-'*25)
             postive_only_iou.append(torch.nanmean(positive_iou_v2).item())
 
         print('positive_pred', np.nanmean(postive_pred_iou) * 100)
