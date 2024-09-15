@@ -11,7 +11,9 @@ import torch.nn.functional as F
 from torchvision.transforms import InterpolationMode
 import argparse
 import numpy as np
+import torch.nn as nn
 from tqdm import tqdm
+
 
 parser = argparse.ArgumentParser(description="A script to demonstrate command-line arguments.")
     
@@ -33,6 +35,7 @@ class CustomImageDataset(Dataset):
         self.image_filenames = sorted(os.listdir(self.image_dir))
         self.transform = transform
         self.target_transform = target_transform
+        self.ignore_index = -1
 
     def __len__(self):
         return len(self.image_filenames)
@@ -49,7 +52,24 @@ class CustomImageDataset(Dataset):
         if self.target_transform:
             label = self.target_transform(label)
 
+        # h, w = label.shape[1:]
+        # one_hot_seg_mask = self.ignore_index * torch.ones((h, w), dtype=torch.long)
+        # for color_idx in range(80):
+        #     idx = (label == self.PALETTE[color_idx].unsqueeze(-1).unsqueeze(-1))
+        #     valid_idx = (idx.sum(0) == 3)#.unsqueeze(0)
+        #     one_hot_seg_mask[valid_idx] = color_idx
+
         return image, label
+
+
+class ToTensorMask(nn.Module):
+    def __init__(self):
+        super(ToTensorMask, self).__init__()
+
+    def forward(self, mask):
+        # breakpoint()
+        return torch.as_tensor(np.array(mask), dtype=torch.int64).unsqueeze(0)#.permute(2, 0, 1)
+    
 
 
 root_dir = '/home/samyakr2/CLIP_Surgery/coco_stuff/dataset/'
@@ -60,8 +80,11 @@ transform = transforms.Compose([
 ])
 target_transform = transforms.Compose([
 #     transforms.Resize((256, 256)),
-    transforms.ToTensor(),
+    ToTensorMask(),
+    # transforms.ToTensor(),
+
 ])
+    
 
 dataset = CustomImageDataset(root_dir=root_dir, transform=transform, target_transform=target_transform)
 dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4)
@@ -133,10 +156,16 @@ image_projector = nn.Sequential(*layers_img).to(device)
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-1e-05R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-0.003R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN101_SSL_0.004R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN101_SSL_90_0.002R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN101_SSL_90_0.002R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.003R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN50e51-0.01R/model_best.pth.tar'
-
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90_0.004R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50-cosine-bs32-e51/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50e51-0.0008R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.0005R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.01R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.05R/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.15R/model_best.pth.tar'
 
 state_dict = torch.load(model_path)
 
@@ -161,11 +190,9 @@ if args.arch == 'CS':
 
         postive_pred_iou = []
         postive_only_iou = []
-        
+        0.
         for img, lab in tqdm(dataloader):
             img = img.to(device)
-    #         print(lab.shape)
-    #         break
             
             image_features = model.encode_image(img)
             image_features = F.normalize(image_features, dim=-1)
@@ -175,7 +202,7 @@ if args.arch == 'CS':
             similarity_map = clip.get_similarity_map(similarity[:, 1:, :], lab.shape[-2:])
             similarity_map_argmax = similarity_map.argmax(-1)+1
             
-            lab = lab*255 + 1
+            lab = lab + 1
             lab[lab==256] = 0
             
             iou_scores = metric_iou(similarity_map_argmax.cpu(), lab[0])#.to(int))
@@ -210,7 +237,7 @@ elif args.arch == 'CLIP_VV':
             similarity_map = clip.get_similarity_map(features[:, 1:, :], lab.shape[-2:])
             similarity_map_argmax = similarity_map.argmax(-1)+1
             
-            lab = lab*255 + 1
+            lab = lab + 1
             lab[lab==256] = 0
             
             
@@ -238,6 +265,12 @@ elif args.arch == 'Ours':
         for img, lab in tqdm(dataloader):
             img = img.to(device)
 
+            # print('DATA TYPE LAB',lab.dtype)
+            # breakpoint()
+    #         print(lab.shape)
+    #         break
+            
+
             image_features = model.encode_image(img)
             image_features = F.normalize(image_features, dim=-1)
             img_feat = image_projector(image_features)
@@ -251,8 +284,17 @@ elif args.arch == 'Ours':
             similarity_map = clip.get_similarity_map(features[:, 1:, :], lab.shape[-2:])
             similarity_map_argmax = similarity_map.argmax(-1)+1
             
-            lab = lab*255 + 1
+            # lab = lab*255 + 1
+            # lab[lab==256] = 0
+
+            
+            lab = lab + 1
             lab[lab==256] = 0
+            # print(lab)
+            # breakpoint()
+            
+
+            # breakpoint()
             
             
             iou_scores = metric_iou(similarity_map_argmax.cpu(), lab[0])#.to(int))
@@ -294,7 +336,7 @@ elif args.arch == 'CS_Ours':
             similarity_map = clip.get_similarity_map(similarity[:, 1:, :], lab.shape[-2:])
             similarity_map_argmax = similarity_map.argmax(-1)+1
             
-            lab = lab*255 + 1
+            lab = lab + 1
             lab[lab==256] = 0
             
             iou_scores = metric_iou(similarity_map_argmax.cpu(), lab[0])#.to(int))

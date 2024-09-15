@@ -13,6 +13,7 @@ import clip
 from torchmetrics.classification import MulticlassJaccardIndex
 import torch.nn.functional as F
 from tqdm import tqdm
+import torch.nn as nn
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 parser = argparse.ArgumentParser(description="A script to demonstrate command-line arguments.")
@@ -23,6 +24,14 @@ parser.add_argument('--model_arch', type=str, required=True, help="The architect
 
 args = parser.parse_args()
 
+class ToTensorMask(nn.Module):
+    def __init__(self):
+        super(ToTensorMask, self).__init__()
+
+    def forward(self, mask):
+        # breakpoint()
+        return torch.as_tensor(np.array(mask), dtype=torch.int64).unsqueeze(0)#.permute(2, 0, 1)
+    
 
 
 class PascalVOCContextDataset(Dataset):
@@ -70,8 +79,14 @@ class PascalVOCContextDataset(Dataset):
         
         # if self.transform:
         image = self.transform(image)
-        to_tensor = transforms.ToTensor()
-        mask = to_tensor(mask) 
+        target_transform = transforms.Compose([
+        #     transforms.Resize((256, 256)),
+            # ToTensorMask(),
+            transforms.ToTensor(),
+
+        ])
+        # to_tensor = transforms.ToTensor()
+        mask = target_transform(mask) 
 
         return image , mask
 
@@ -82,6 +97,14 @@ transform = transforms.Compose([
     transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),
     
 ])
+class ToTensorMask(nn.Module):
+    def __init__(self):
+        super(ToTensorMask, self).__init__()
+
+    def forward(self, mask):
+        # breakpoint()
+        return torch.as_tensor(np.array(mask), dtype=torch.int64).unsqueeze(0)#.permute(2, 0, 1)
+    
 # transform = transforms.Compose([
 #     # transforms.Resize((512, 512)),
 #     transforms.ToTensor()
@@ -145,12 +168,22 @@ image_projector = nn.Sequential(*layers_img).to(device)
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-0.002R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN101_SSL_0.004R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN101_SSL_90_0.003R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN101_SSL_90_0.003R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN50e51-0.01R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90_0.003R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50-cosine-bs32-e51/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50e51-0.0008R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.005R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p0.9-0.005R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p0.9-0.01R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.0005R/model_best.pth.tar'
 
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.0005R/model_best.pth.tar'
+
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.15R/model_best.pth.tar'
 
 
 state_dict = torch.load(model_path)
@@ -322,6 +355,10 @@ elif args.arch == 'CS_Ours':
             images = images.to(device)
             targets = targets#.to(device)
             mask_shape = targets.shape[-2:]
+            # plt.imshow(images[0].permute(1,2,0).detach().cpu().numpy())
+            # plt.savefig('/home/samyakr2/data_VOC/samyak.jpg')
+            # plt.show()
+            # breakpoint()
 
             image_features = model.encode_image(images)
             image_features = F.normalize(image_features, dim=-1)
@@ -347,7 +384,7 @@ elif args.arch == 'CS_Ours':
                 # print(logits_soft_max.min(), logits_soft_max.mean(), logits_soft_max.max())
                 simialrity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
 
-            iou_scores = metric_iou(simialrity_map_argmax.cpu(), (targets[0]*255).to(int))
+            iou_scores = metric_iou(simialrity_map_argmax.cpu(), targets[0])
             positive_iou = iou_scores[torch.unique(simialrity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
             postive_pred_iou.append(torch.nanmean(positive_iou).item())
             

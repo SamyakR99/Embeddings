@@ -65,7 +65,18 @@ elif args.model_arch == 'RN101':
 preprocess_img =  Compose([Resize((448, 448), interpolation=BICUBIC), ToTensor(),
     Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))])
 
-preprocess_target =  Compose([ToTensor()])
+# preprocess_target =  Compose([ToTensor()])
+
+class ToTensorMask(nn.Module):
+    def __init__(self):
+        super(ToTensorMask, self).__init__()
+
+    def forward(self, mask):
+        # breakpoint()
+        return torch.as_tensor(np.array(mask), dtype=torch.int64).unsqueeze(0)#.permute(2, 0, 1)
+
+preprocess_target = Compose([ ToTensorMask()])
+    
 
 
 
@@ -119,10 +130,20 @@ image_projector = nn.Sequential(*layers_img).to(device)
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc_RN50_SSL_90_0.004R/model_best.pth.tar'
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-0.02R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-1e-05R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-1e-05R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101e51-0.003R/model_best.pth.tar'
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN50e51-0.01R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco_RN50_SSL_90_0.004R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50-cosine-bs32-e51/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50e51-0.0008R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.005R/model_best.pth.tar'
+
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.0005R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p0.9-0.01R/model_best.pth.tar'
+
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.05R/model_best.pth.tar'
+model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.15R/model_best.pth.tar'
 
 
 
