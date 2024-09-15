@@ -130,20 +130,22 @@ def main():
             sched.load_state_dict(checkpoint['scheduler'])
 
     for epoch in range(args.start_epoch, cfg.OPTIM.MAX_EPOCH):
-        batch_time, losses, mAP_batches = train_coop(train_loader, [val_loader],  model, optim, sched, args, cfg, epoch)
+        batch_time, losses,losses_SSL, mAP_batches = train_coop(train_loader, [val_loader],  model, optim, sched, args, cfg, epoch)
         print('Train: [{0}/{1}]\t'
               'Time {batch_time.avg:.3f}\t'
               'Loss {losses.avg:.2f} \t'
+              'Loss_SSL {losses_SSL.avg:.4f} \t'
               'mAP {mAP_batches.avg:.2f}'.format(
             epoch + 1, cfg.OPTIM.MAX_EPOCH, batch_time=batch_time,
-            losses=losses, mAP_batches=mAP_batches), flush=True)
+            losses=losses, losses_SSL=losses_SSL, mAP_batches=mAP_batches), flush=True)
 
         print('Train: [{0}/{1}]\t'
               'Time {batch_time.avg:.3f}\t'
               'Loss {losses.avg:.2f} \t'
+              'Loss_SSL {losses_SSL.avg:.4f} \t'
               'mAP {mAP_batches.avg:.2f}'.format(
             epoch + 1, cfg.OPTIM.MAX_EPOCH, batch_time=batch_time,
-            losses=losses, mAP_batches=mAP_batches), file=logfile, flush=True)
+            losses=losses,losses_SSL=losses_SSL, mAP_batches=mAP_batches), file=logfile, flush=True)
 
         if (epoch + 1) % args.val_every_n_epochs == 0 or epoch == args.stop_epochs - 1:
             p_c, r_c, f_c, p_o, r_o, f_o, mAP_score = validate(val_loader, model, args)
