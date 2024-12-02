@@ -27,8 +27,9 @@ parser = argparse.ArgumentParser(description="A script to demonstrate command-li
     
 # Add the --arch argument
 parser.add_argument('--arch', type=str, required=True, help="The architecture to use (e.g., 'rn101').")
-parser.add_argument('--thres', type=int, required=True, help="The architecture to use (e.g., 'rn101').")
+# parser.add_argument('--thres', type=int, required=True, help="The architecture to use (e.g., 'rn101').")
 parser.add_argument('--model_arch', type=str, required=True, help="The architecture to use (e.g., 'rn101').")
+parser.add_argument('--model_path', type=str, required=True, help="add path to model")
 
 # Parse the arguments
 args = parser.parse_args()
@@ -143,8 +144,9 @@ image_projector = nn.Sequential(*layers_img).to(device)
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p0.9-0.01R/model_best.pth.tar'
 
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.05R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.15R/model_best.pth.tar'
-
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.1R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN50SSL_posneg_p1.0-0.1R/model_best.pth.tar'
+model_path = args.model_path
 
 
 state_dict = torch.load(model_path)
@@ -166,9 +168,9 @@ if args.arch == 'CS':
 
     with torch.no_grad():
         iou_scores = []
-        threshold = 0.9
+        # threshold = 0.9
 
-        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
         
         postive_pred_iou = []
@@ -209,9 +211,9 @@ if args.arch == 'CS':
             similarity_map = clip.get_similarity_map(similarity[:, 1:, :], complete_mask.shape)
             similarity_map_argmax = similarity_map.argmax(-1)+1
 
-            if args.thres == 1:
-                logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
-                similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
+            # if args.thres == 1:
+            #     logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
+            #     similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
             # print('similarity_map',similarity_map_argmax.shape)
             # print(torch.unique(similarity_map_argmax))
             iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
@@ -226,8 +228,8 @@ if args.arch == 'CS':
 
 elif args.arch == 'CLIP_VV':
     with torch.no_grad():
-        threshold = 0.9
-        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        # threshold = 0.9
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
         postive_pred_iou = []
         postive_only_iou = []
@@ -270,9 +272,9 @@ elif args.arch == 'CLIP_VV':
 
             similarity_map = clip.get_similarity_map(features[:, 1:, :], complete_mask.shape)
             similarity_map_argmax = similarity_map.argmax(-1)+1
-            if args.thres == 1:
-                logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
-                similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
+            # if args.thres == 1:
+            #     logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
+            #     similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
             
             iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
             positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
@@ -286,8 +288,8 @@ elif args.arch == 'CLIP_VV':
 
 elif args.arch == 'Ours':
     with torch.no_grad():
-        threshold = 0.9
-        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        # threshold = 0.9
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
         postive_pred_iou = []
         postive_only_iou = []
@@ -319,10 +321,9 @@ elif args.arch == 'Ours':
             # print('complete mask shape', complete_mask.shape)
             
             image_features = model.encode_image(img)
-            image_features = F.normalize(image_features, dim=-1)
             
-            img_feat = image_projector(image_features)
-            image_features = img_feat
+            img_feat = F.normalize(image_features, dim=-1)
+            image_features = image_projector(img_feat)
             
             text_feat = text_projector(text_feats)
             text_features = F.normalize(text_feat, dim=-1) 
@@ -333,9 +334,9 @@ elif args.arch == 'Ours':
 
             similarity_map = clip.get_similarity_map(features[:, 1:, :], complete_mask.shape)
             similarity_map_argmax = similarity_map.argmax(-1)+1
-            if args.thres == 1:
-                logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
-                similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
+            # if args.thres == 1:
+            #     logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
+            #     similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
             
             iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
             positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT
@@ -349,8 +350,8 @@ elif args.arch == 'Ours':
 
 elif args.arch == 'CS_Ours':
     with torch.no_grad():
-        threshold = 0.9
-        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device)
+        # threshold = 0.9
+        text_feats = clip.encode_text_with_prompt_ensemble(model, classnames[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(classnames), average=None, ignore_index=0).to('cpu')
         postive_pred_iou = []
         postive_only_iou = []
@@ -396,9 +397,9 @@ elif args.arch == 'CS_Ours':
 
             similarity_map = clip.get_similarity_map(similarity[:, 1:, :], complete_mask.shape)
             similarity_map_argmax = similarity_map.argmax(-1)+1
-            if args.thres == 1:
-                logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
-                similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
+            # if args.thres == 1:
+            #     logits_soft_max = (100*similarity_map).softmax(dim=-1).max(dim=-1)[0]
+            #     similarity_map_argmax[logits_soft_max < threshold] = 0 ## threshold to ignore background
             
             iou_scores = metric_iou(similarity_map_argmax.cpu(), torch.tensor(np.expand_dims(complete_mask,0)))#.to(int))
             positive_iou = iou_scores[torch.unique(similarity_map_argmax).cpu()] ## Keep only postive classes for IoU, note postive means from our prediction, not GT

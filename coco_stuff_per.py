@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(description="A script to demonstrate command-li
 # Add the --arch argument
 parser.add_argument('--arch', type=str, required=True, help="The architecture to use (e.g., 'CLIP').")
 parser.add_argument('--model_arch', type=str, required=True, help="The architecture to use (e.g., 'rn101').")
-# parser.add_argument('--thres', type=int, required=True, help="The architecture to use (e.g., 'rn101').")
+parser.add_argument('--model_path', type=str, required=True, help="Add path to the weights!.")
 
 # Parse the arguments
 args = parser.parse_args()
@@ -163,9 +163,12 @@ image_projector = nn.Sequential(*layers_img).to(device)
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50-cosine-bs32-e51/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/coco-DualCoop-RN50e51-0.0008R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_p1.0-0.0005R/model_best.pth.tar'
-# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.01R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.1R/model_best.pth.tar'
 # model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.05R/model_best.pth.tar'
-model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.15R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN101SSL_posneg_p1.0-0.075R/model_best.pth.tar'
+# model_path = '/home/samyakr2/Redundancy/DualCoOp/output/voc2007-DualCoop-RN50SSL_posneg_p1.0-0.1R/model_best.pth.tar'
+
+model_path = args.model_path
 
 state_dict = torch.load(model_path)
 
@@ -185,7 +188,7 @@ image_projector.load_state_dict(projector_weights_img)
 
 if args.arch == 'CS':
     with torch.no_grad():
-        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device)
+        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(coco_stuff_labels), average=None, ignore_index=0).to('cpu')
 
         postive_pred_iou = []
@@ -217,7 +220,7 @@ if args.arch == 'CS':
 
 elif args.arch == 'CLIP_VV':
     with torch.no_grad():
-        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device)
+        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(coco_stuff_labels), average=None, ignore_index=0).to('cpu')
 
         postive_pred_iou = []
@@ -256,7 +259,7 @@ elif args.arch == 'CLIP_VV':
 
 elif args.arch == 'Ours':
     with torch.no_grad():
-        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device)
+        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(coco_stuff_labels), average=None, ignore_index=0).to('cpu')
 
         postive_pred_iou = []
@@ -265,17 +268,10 @@ elif args.arch == 'Ours':
         for img, lab in tqdm(dataloader):
             img = img.to(device)
 
-            # print('DATA TYPE LAB',lab.dtype)
-            # breakpoint()
-    #         print(lab.shape)
-    #         break
-            
-
             image_features = model.encode_image(img)
-            image_features = F.normalize(image_features, dim=-1)
-            img_feat = image_projector(image_features)
-            image_features = img_feat
-
+            img_feat = F.normalize(image_features, dim=-1)
+            image_features = image_projector(img_feat)
+            
             text_feat = text_projector(text_feats)
             text_features = F.normalize(text_feat, dim=-1)
             
@@ -313,7 +309,7 @@ elif args.arch == 'Ours':
 
 elif args.arch == 'CS_Ours':
     with torch.no_grad():
-        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device)
+        text_feats = clip.encode_text_with_prompt_ensemble(model, coco_stuff_labels[1:], device, prompt_templates = ['a photo of a {}.'])
         metric_iou = MulticlassJaccardIndex(num_classes=len(coco_stuff_labels), average=None, ignore_index=0).to('cpu')
 
         postive_pred_iou = []
